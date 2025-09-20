@@ -6,6 +6,17 @@ func handleOperationType(context map[string]interface{}) string {
 	return "next"
 }
 
+func handleChoseHero(context map[string]interface{}) string {
+	hero := context["hero"].(string)
+	context["equipment"] = hero
+	context["equipment"] = hero
+	return "next"
+}
+
+func handleHistoryHero(context map[string]interface{}) string {
+	return "next"
+}
+
 func handleMakeAttack(context map[string]interface{}) string {
 	// todo здесь будет логика боя
 	equipment := context["equipment"].([]string)

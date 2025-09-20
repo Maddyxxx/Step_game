@@ -12,6 +12,8 @@ type HandlerFuncDb func(*sqlx.DB, map[string]interface{}) string
 
 var handlers = map[string]HandlerFunc{
 	"handleOperationType": handleOperationType,
+	"handleChoseHero":     handleChoseHero,
+	"handleHistoryHero":   handleHistoryHero,
 	"handleMakeAttack":    handleMakeAttack,
 }
 

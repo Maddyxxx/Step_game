@@ -1,5 +1,7 @@
 package tg_bot
 
+import "Step_game/heroes"
+
 type Scenarios struct {
 	scenarioName string
 	firstStep    int
@@ -26,6 +28,24 @@ func newScenario(name string, firstStep int, steps map[int]ScenarioStep) Scenari
 
 // Создание сценариев
 var (
+	newGame = newScenario("newGame", 1, map[int]ScenarioStep{
+		1: {
+			text:     "Выберите персонажа",
+			handler:  "handleChoseHero",
+			nextStep: 2,
+			prevStep: 1,
+			buttons:  heroes.Heroes,
+		},
+		2: {
+			text:     "",
+			handler:  "handleHistoryHero",
+			nextStep: 3,
+			prevStep: 1,
+		},
+		3: {
+			action: "",
+		},
+	})
 	unitAttackScenario = newScenario("unitAttackScenario", 1, map[int]ScenarioStep{
 		1: {
 			text:     "",
