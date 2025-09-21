@@ -8,3 +8,12 @@ type Skill struct {
 	Damage      int
 	ManaCost    int
 }
+
+var WarSmash = Skill{
+	"warrior",
+	1,
+	"warSmash",
+	"мощный удар",
+	10,
+	40,
+}
