@@ -24,7 +24,7 @@ var wChest1 = Equipment{
 	50,
 }
 
-var WarriorStartEquipment = []Equipment{
-	wSword1,
-	wChest1,
+var WarriorStartEquipment = map[string]Equipment{
+	"меч":    wSword1,
+	"грудак": wChest1,
 }

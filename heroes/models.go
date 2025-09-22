@@ -14,7 +14,7 @@ type ClassHero struct {
 	Level     int
 	Health    int
 	Mana      int
-	Skills    []Skill
+	Skills    map[string]Skill
 	Equipment map[string]Equipment
 }
 
@@ -31,7 +31,7 @@ func (h ClassHero) UseAbility(ability string) (string, int) {
 		if skill.Name == ability {
 			if h.Mana > skill.ManaCost {
 				h.Mana -= skill.ManaCost
-				return "ok", skill.Damage + h.Level*10
+				return "", skill.Damage + h.Level*10
 			} else {
 				return "недостаточно маны", 0
 			}
@@ -64,13 +64,15 @@ func (h ClassHero) ChangeEquipment(newEquipment Equipment) {
 // Heroes
 var (
 	Warrior = ClassHero{
-		Class:  "warrior",
-		Level:  1,
-		Health: 100,
-		Mana:   0,
+		Class:     "warrior",
+		Level:     1,
+		Health:    100,
+		Mana:      0,
+		Skills:    WarriorSkills,
+		Equipment: WarriorStartEquipment,
 	}
 )
 
-var Heroes = []string{
-	Warrior.Class,
+var Heroes = map[string]ClassHero{
+	"warrior": Warrior,
 }

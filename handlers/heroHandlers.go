@@ -1,5 +1,9 @@
 package handlers
 
+import (
+	"Step_game/heroes"
+)
+
 // handleOperationType - обрабатывает введенный тип операции и возвращает результат
 func handleOperationType(context map[string]interface{}) string {
 	context["checkType"] = context["textMsg"]
@@ -8,8 +12,7 @@ func handleOperationType(context map[string]interface{}) string {
 
 func handleChoseHero(context map[string]interface{}) string {
 	hero := context["hero"].(string)
-	context["equipment"] = hero
-	context["equipment"] = hero
+	context["hero"] = heroes.Heroes[hero]
 	return "next"
 }
 

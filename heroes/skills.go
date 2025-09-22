@@ -17,3 +17,7 @@ var WarSmash = Skill{
 	10,
 	40,
 }
+
+var WarriorSkills = map[string]Skill{
+	"мощный удар": WarSmash,
+}
