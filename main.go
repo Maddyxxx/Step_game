@@ -1,25 +1,72 @@
 package main
 
 import (
-	conf "Step_game/config"
 	"Step_game/database"
 	"Step_game/migrations"
-	bot "Step_game/tg_bot"
+	"github.com/joho/godotenv"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"Step_game/tg_bot"
+	_ "github.com/mattn/go-sqlite3"
+	"go.uber.org/zap"
 )
 
 func main() {
-	//todo добавить явную инициализацию конфига
-	//todo инициализация конфига, запуск бота(восстановление бота после паники, мягкое завершение)
+	// переменные из .env файла
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found: %v", err)
+	}
 
-	db := database.InitDBMust("step_game.db")
+	// Инициализация логгера
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("Failed to create logger: %v", err)
+	}
+	defer logger.Sync()
+
+	// Инициализация БД
+	db := database.InitDBMust(os.Getenv("DB_PATH"))
 	defer db.Close()
 
 	// Применение миграций (паникует при ошибках)
 	migrations.RunMigrations(db)
+	
+	// Конфигурация бота
+	cfg := tg_bot.Config{
+		Token: os.Getenv("TELEGRAM_BOT_TOKEN"),
+		Debug: os.Getenv("DEBUG") == "true",
+	}
 
-	bot := bot.InitBot(conf.TgKey, db, false)
+	// Зависимости
+	deps := tg_bot.Dependencies{
+		DB:     db,
+		Logger: logger,
+	}
+
+	// Создание бота
+	bot, err := tg_bot.NewBot(cfg, deps)
+	if err != nil {
+		logger.Fatal("Failed to create bot", zap.Error(err))
+	}
+	defer func(bot *tg_bot.Bot) {
+		err := bot.Close()
+		if err != nil {
+			logger.Fatal("Failed to close bot", zap.Error(err))
+		}
+	}(bot)
+
+	// Запуск бота
+	logger.Info("Starting bot...")
+
+	// Обработка graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
 	bot.Run()
 
-	// Используй .env файл для хранения ключей. и не забудь .env.template
-	// viper библиотека для env файла
+	<-quit
+	logger.Info("Shutting down...")
 }

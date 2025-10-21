@@ -1,2 +1,2 @@
-config.go
-gameDb
+*.db
+.env

@@ -4,7 +4,6 @@ import (
 	"Step_game/domain"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
@@ -26,7 +25,6 @@ func NewSQLXRepository(db *sqlx.DB, logger *zap.Logger) *SQLXRepository {
 // GetByID возвращает сущность по ID
 func (r *SQLXRepository) GetByID(ctx context.Context, id int64, entity domain.Entity) error {
 	const op = "SQLXRepository.GetByID"
-
 	if err := entity.Validate(); err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -39,11 +37,6 @@ func (r *SQLXRepository) GetByID(ctx context.Context, id int64, entity domain.En
 			return domain.ErrNotFound
 		}
 		return fmt.Errorf("%s: %w", op, err)
-	}
-
-	// Обработка JSON полей для UserState
-	if userState, ok := entity.(*domain.UserState); ok {
-		return r.scanUserStateContext(ctx, userState)
 	}
 
 	return nil
@@ -64,9 +57,6 @@ func (r *SQLXRepository) GetAll(ctx context.Context, entityType domain.Entity) (
 
 		entities := make([]domain.Entity, len(states))
 		for i := range states {
-			if err := r.scanUserStateContext(ctx, &states[i]); err != nil {
-				return nil, fmt.Errorf("%s: %w", op, err)
-			}
 			entities[i] = &states[i]
 		}
 		return entities, nil
@@ -103,12 +93,12 @@ func (r *SQLXRepository) Create(ctx context.Context, entity domain.Entity) error
 	defer tx.Rollback()
 
 	switch e := entity.(type) {
-	case domain.UserState:
-		if err := r.createUserState(ctx, tx, &e); err != nil {
+	case *domain.UserState:
+		if err := r.createUserState(ctx, tx, e); err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
-	case domain.Request:
-		if err := r.createRequest(ctx, tx, &e); err != nil {
+	case *domain.Request:
+		if err := r.createRequest(ctx, tx, e); err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
 	default:
@@ -137,8 +127,8 @@ func (r *SQLXRepository) Update(ctx context.Context, entity domain.Entity) error
 	defer tx.Rollback()
 
 	switch e := entity.(type) {
-	case domain.UserState:
-		if err := r.updateUserState(ctx, tx, &e); err != nil {
+	case *domain.UserState:
+		if err := r.updateUserState(ctx, tx, e); err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
 	default:
@@ -181,30 +171,20 @@ func (r *SQLXRepository) Delete(ctx context.Context, id int64, entityType domain
 
 // Вспомогательные методы для UserState
 func (r *SQLXRepository) createUserState(ctx context.Context, tx *sqlx.Tx, state *domain.UserState) error {
-	contextJSON, err := json.Marshal(state.Context)
-	if err != nil {
-		return fmt.Errorf("marshal context: %w", err)
-	}
+	query := `INSERT INTO userstate (chat_id, user_name, scenario_name, step_name) 
+              VALUES (?, ?, ?, ?)`
 
-	query := `INSERT INTO userstate (chat_id, user_name, scenario_name, step_name, context) 
-              VALUES (?, ?, ?, ?, ?)`
-
-	_, err = tx.ExecContext(ctx, query,
-		state.ChatID, state.UserName, state.ScenarioName, state.StepName, contextJSON)
+	_, err := tx.ExecContext(ctx, query,
+		state.ChatID, state.UserName, state.ScenarioName, state.StepName)
 	return err
 }
 
 func (r *SQLXRepository) updateUserState(ctx context.Context, tx *sqlx.Tx, state *domain.UserState) error {
-	contextJSON, err := json.Marshal(state.Context)
-	if err != nil {
-		return fmt.Errorf("marshal context: %w", err)
-	}
-
-	query := `UPDATE userstate SET user_name = ?, scenario_name = ?, step_name = ?, context = ? 
+	query := `UPDATE userstate SET user_name = ?, scenario_name = ?, step_name = ?
               WHERE chat_id = ?`
 
 	result, err := tx.ExecContext(ctx, query,
-		state.UserName, state.ScenarioName, state.StepName, contextJSON, state.ChatID)
+		state.UserName, state.ScenarioName, state.StepName, state.ChatID)
 	if err != nil {
 		return err
 	}
@@ -225,24 +205,4 @@ func (r *SQLXRepository) createRequest(ctx context.Context, tx *sqlx.Tx, req *do
 	query := `INSERT INTO requests (date, user_name, operation, result) VALUES (?, ?, ?, ?)`
 	_, err := tx.ExecContext(ctx, query, req.Date, req.UserName, req.Operation, req.Result)
 	return err
-}
-
-func (r *SQLXRepository) scanUserStateContext(ctx context.Context, state *domain.UserState) error {
-	var contextJSON []byte
-	var contextMap map[string]interface{}
-
-	// Получаем JSON контекст отдельным запросом
-	query := "SELECT context FROM userstate WHERE chat_id = ?"
-	if err := r.db.GetContext(ctx, &contextJSON, query, state.ChatID); err != nil {
-		return fmt.Errorf("get context: %w", err)
-	}
-
-	if len(contextJSON) > 0 {
-		if err := json.Unmarshal(contextJSON, &contextMap); err != nil {
-			return fmt.Errorf("unmarshal context: %w", err)
-		}
-		state.Context = contextMap
-	}
-
-	return nil
 }

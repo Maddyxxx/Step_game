@@ -13,7 +13,6 @@ import (
 
 type UserStateRepo struct {
 	db     *sqlx.DB
-	repo   Repository
 	logger *zap.Logger
 }
 
@@ -39,11 +38,6 @@ func (r *UserStateRepo) GetByChatID(ctx context.Context, chatID int64) (*domain.
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
 		}
-		return nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	// Загружаем контекст
-	if err := r.loadContext(ctx, &state); err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -75,25 +69,6 @@ func (r *UserStateRepo) UpdateStepAndContext(
 
 	if rows == 0 {
 		return domain.ErrNotFound
-	}
-
-	return nil
-}
-
-func (r *UserStateRepo) loadContext(ctx context.Context, state *domain.UserState) error {
-	var contextJSON []byte
-	query := "SELECT context FROM userstate WHERE chat_id = ?"
-
-	if err := r.db.GetContext(ctx, &contextJSON, query, state.ChatID); err != nil {
-		return fmt.Errorf("load context: %w", err)
-	}
-
-	if len(contextJSON) > 0 {
-		var contextMap map[string]interface{}
-		if err := json.Unmarshal(contextJSON, &contextMap); err != nil {
-			return fmt.Errorf("unmarshal context: %w", err)
-		}
-		state.Context = contextMap
 	}
 
 	return nil

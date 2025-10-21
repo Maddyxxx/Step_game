@@ -1,5 +1,7 @@
 package config
 
+import "go.uber.org/zap"
+
 type Intent struct {
 	Tokens   []string
 	Scenario string
@@ -34,7 +36,7 @@ var Intents = []Intent{
 	helpIntent, startIntent, newGameIntent, continueGameIntent,
 }
 
-func GetIntent(token string) *Intent {
+func GetIntent(token string, log *zap.Logger) *Intent {
 	for _, intent := range Intents {
 		for _, token_ := range intent.Tokens {
 			if token == token_ {

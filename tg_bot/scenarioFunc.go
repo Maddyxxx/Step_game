@@ -12,26 +12,27 @@ import (
 
 func (s *Scenarios) StartScenario(b *Bot) {
 	b.repo.Delete(b.ctx, b.state.ChatID, b.state)
-	b.logger.Info("Starting scenario", s.scenarioName)
+	b.logger.Info("Starting scenario", zap.String("scenarioName", s.scenarioName))
 	b.state.ScenarioName = s.scenarioName
 	b.state.StepName = s.firstStep
-	b.state.Context["textToSend"] = nil
+	b.context["textToSend"] = nil
 
 	err := b.repo.Create(b.ctx, b.state)
 	if err == nil {
 		b.logger.Info("Success inserting data for starting scenario")
 		s.sendStep(b, s.firstStep)
 	} else {
-		b.logger.Error("Error inserting data ", err)
+		b.logger.Error("Error inserting data ", zap.Error(err))
 		b.sendMsg("Произошла ошибка начала сценария", nil)
 	}
 }
 
 // ContinueScenario - продолжение сценария при наличии state
 func (s *Scenarios) ContinueScenario(b *Bot) {
-	b.logger.Info("Continuing scenario %s, step N %d", s.scenarioName, b.state.StepName)
+	b.logger.Info("Continuing scenario %s, step N %d",
+		zap.String("scenarioName", s.scenarioName), zap.Int("StepName", b.state.StepName))
 	step := s.steps[b.state.StepName]
-	resp := hand.HandlerDo(step.handler, b.state.Context)
+	resp := hand.HandlerDo(step.handler, b.context)
 
 	switch resp {
 	case "stop":
@@ -43,10 +44,10 @@ func (s *Scenarios) ContinueScenario(b *Bot) {
 		b.state.StepName = step.prevStep
 		s.sendStep(b, step.prevStep)
 	case "action":
-		step.action = fmt.Sprintf("%v", b.state.Context["action"])
+		step.action = fmt.Sprintf("%v", b.context["action"])
 		s.makeAction(b, step)
 	default:
-		b.sendMsg(b.state.Context["error"], nil)
+		b.sendMsg(b.context["error"], nil)
 		s.finishScenario(b, "response error")
 	}
 }
@@ -60,13 +61,15 @@ func (s *Scenarios) finishScenario(b *Bot, result string) {
 		b.logger.Error("Failed to delete UserState", zap.Error(err))
 	}
 	b.sendMsg(conf.FinishScenarioAnswer, nil)
-	b.logger.Info("%s scenario %v for ChatID %d", result, s.scenarioName, b.state.ChatID)
+	b.logger.Info("Scenario for ChatID", zap.String("result", result),
+		zap.String("scenarioName", s.scenarioName), zap.Int64("ChatID", b.state.ChatID))
 }
 
 // sendStep - отправка следующего шага по сценарию
 func (s *Scenarios) sendStep(b *Bot, stepNum int) {
-	b.logger.Info("Sending step N %d for scenario %s", stepNum, s.scenarioName)
-	defer func(usRepo *repository.UserStateRepo, ctx context.Context, state domain.UserState) {
+	b.logger.Info("Sending step for scenario", zap.Int("stepNum", stepNum),
+		zap.String("scenarioName", s.scenarioName))
+	defer func(usRepo *repository.UserStateRepo, ctx context.Context, state *domain.UserState) {
 		err := b.repo.Update(ctx, state)
 		if err != nil {
 			b.logger.Error("Failed to update UserState", zap.Error(err))
@@ -75,7 +78,7 @@ func (s *Scenarios) sendStep(b *Bot, stepNum int) {
 	step := s.steps[stepNum]
 	buttons := b.makeButtons(step.buttons)
 
-	if textToSend, ok := b.state.Context["textToSend"]; ok && textToSend != nil {
+	if textToSend, ok := b.context["textToSend"]; ok && textToSend != nil {
 		b.sendMsg(textToSend, buttons)
 	} else {
 		if step.text != "" {
@@ -94,12 +97,12 @@ func (s *Scenarios) sendStep(b *Bot, stepNum int) {
 func (s *Scenarios) makeAction(b *Bot, step ScenarioStep) {
 	if s.scenarioName == "dealUpdate" {
 		defer s.finishScenario(b, "finished")
-		resp := hand.HandlerDo(step.handler, b.state.Context)
+		resp := hand.HandlerDo(step.handler, b.context)
 		b.sendMsg(resp, nil)
 		return
 	}
 
-	hand.HandlerDo(step.action, b.state.Context)
+	hand.HandlerDo(step.action, b.context)
 	defer s.finishScenario(b, "interrupted")
-	b.sendMsg(b.state.Context["error"], nil)
+	b.sendMsg(b.context["error"], nil)
 }

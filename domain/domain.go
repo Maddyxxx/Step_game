@@ -8,11 +8,10 @@ type Entity interface {
 
 // UserState представляет состояние пользователя
 type UserState struct {
-	ChatID       int64                  `db:"chat_id"`
-	UserName     string                 `db:"user_name"`
-	ScenarioName string                 `db:"scenario_name"`
-	StepName     int                    `db:"step_name"`
-	Context      map[string]interface{} `db:"-"`
+	ChatID       int64  `db:"chat_id"`
+	UserName     string `db:"user_name"`
+	ScenarioName string `db:"scenario_name"`
+	StepName     int    `db:"step_name"`
 }
 
 func (UserState) TableName() string { return "userstate" }

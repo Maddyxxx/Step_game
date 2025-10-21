@@ -6,30 +6,36 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
-	"log"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	conf "Step_game/config"
-	mod "Step_game/domain"
+	"Step_game/domain"
 )
 
+// Config конфигурация бота
+type Config struct {
+	Token string
+	Debug bool
+}
+
 type Bot struct {
-	bot    *tgbotapi.BotAPI
-	state  mod.UserState
-	repo   *repository.SQLXRepository
-	usRepo *repository.UserStateRepo
-	logger *zap.SugaredLogger
-	ctx    context.Context
+	api     *tgbotapi.BotAPI
+	state   *domain.UserState
+	repo    *repository.SQLXRepository
+	usRepo  *repository.UserStateRepo
+	logger  *zap.Logger
+	ctx     context.Context
+	cancel  context.CancelFunc
+	context map[string]interface{}
 }
 
 // Run - запуск бота
 func (b *Bot) Run() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60 // todo REST
-
-	for update := range b.bot.GetUpdatesChan(u) {
+	for update := range b.api.GetUpdatesChan(u) {
 		if msg := update.Message; msg != nil {
 			b.handleMessage(msg)
 		}
@@ -39,18 +45,20 @@ func (b *Bot) Run() {
 // handleMessage - обработка входящих сообщений
 func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 	b.state.ChatID = msg.Chat.ID
-	b.logger.Info("получено новое сообщение от ", msg.Chat.ID, " ", msg.Text)
-	intent := conf.GetIntent(strings.ToLower(msg.Text))
-	_, err := b.usRepo.GetByChatID(b.ctx, b.state.ChatID) // попытка получить состояние пользователя
-
+	b.logger.Info("Получено новое сообщение: ", zap.String("Message", msg.Text))
+	intent := conf.GetIntent(strings.ToLower(msg.Text), b.logger)
+	err := b.repo.GetByID(b.ctx, b.state.ChatID, b.state) // попытка получить состояние пользователя
+	fmt.Println(err)
 	if intent != nil {
 		b.processIntent(intent, msg, b.ctx)
 	} else if err == nil {
-		b.state.Context["textMsg"] = strings.ToLower(msg.Text)
+		// если пользователь уже есть - продолжение сценария
+		b.context["textMsg"] = strings.ToLower(msg.Text)
 		scenario := mapScenarios[b.state.ScenarioName]
 		scenario.ContinueScenario(b)
 	} else {
-		log.Printf("No message in intents for textMsg: %s", msg.Text)
+		b.logger.Info("There is no message in intents for textMsg: %s", zap.String(
+			"Message", msg.Text), zap.Error(err))
 		b.sendMsg(conf.DefaultAnswer, nil)
 	}
 }
@@ -61,7 +69,7 @@ func (b *Bot) processIntent(intent *conf.Intent, msg *tgbotapi.Message, ctx cont
 	if scenario != "" {
 		scenario := mapScenarios[scenario]
 		b.state.UserName = msg.From.UserName
-		//b.state.Context["operationType"] = conf.OperTypes[msg.Text]
+		//todo b.context["operationType"] = conf.OperTypes[msg.Text]
 		scenario.StartScenario(b)
 	} else {
 		buttons := b.makeButtons(intent.Buttons)
@@ -92,7 +100,8 @@ func (b *Bot) sendMsg(msg interface{}, buttons interface{}) {
 	if buttons != nil {
 		Msg.ReplyMarkup = buttons
 	}
-	b.bot.Send(Msg)
+	b.api.Send(Msg)
+	b.logger.Info("Sending message: ", zap.String("Message", Msg.Text))
 }
 
 // todo доработать
@@ -107,23 +116,56 @@ func (b *Bot) sendMsg(msg interface{}, buttons interface{}) {
 //	req.InsertData(b.db)
 //}
 
-func InitBot(key string, db *sqlx.DB, debug bool) *Bot {
-	logger, _ := zap.NewDevelopment()
+// Dependencies зависимости для создания бота
+type Dependencies struct {
+	DB     *sqlx.DB
+	Logger *zap.Logger
+}
 
-	bot, err := tgbotapi.NewBotAPI(key)
+// NewBot - создает новый экземпляр бота
+func NewBot(cfg Config, deps Dependencies) (*Bot, error) {
+	const op = "bot.NewBot"
+
+	// Инициализация Telegram API
+	botAPI, err := tgbotapi.NewBotAPI(cfg.Token)
 	if err != nil {
-		logger.Fatal("Error connecting to Telegram: %v", zap.Error(err))
-		return nil
+		return nil, fmt.Errorf("%s: create bot API: %w", op, err)
 	}
-	bot.Debug = debug
-	logger.Info("Authorized on account", zap.String("userName", bot.Self.UserName))
 
-	return &Bot{
-		bot:    bot,
-		state:  mod.UserState{Context: map[string]interface{}{}},
-		repo:   repository.NewSQLXRepository(db, logger),
-		usRepo: repository.NewUserStateRepository(db, logger),
-		logger: logger.Sugar(),
-		ctx:    context.Background(),
+	botAPI.Debug = cfg.Debug
+
+	// Создание репозиториев
+	repo := repository.NewSQLXRepository(deps.DB, deps.Logger)
+
+	// Создание контекста с возможностью отмены
+	ctx, cancel := context.WithCancel(context.Background())
+
+	bot := &Bot{
+		api:     botAPI,
+		state:   &domain.UserState{},
+		repo:    repo,
+		logger:  deps.Logger,
+		ctx:     ctx,
+		cancel:  cancel,
+		context: make(map[string]interface{}),
 	}
+
+	deps.Logger.Info("Bot authorized successfully",
+		zap.String("username", botAPI.Self.UserName),
+		zap.Bool("debug", cfg.Debug),
+	)
+
+	return bot, nil
+}
+
+// Close - освобождает ресурсы бота
+func (b *Bot) Close() error {
+	b.logger.Info("Shutting down bot...")
+
+	// Отмена контекста
+	if b.cancel != nil {
+		b.cancel()
+	}
+
+	return nil
 }
