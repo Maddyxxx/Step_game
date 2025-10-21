@@ -1,2 +1,12 @@
-*.db
+# IDE and editor files
+.idea/
+
+# Environment variables
 .env
+.env.local
+.env.*.local
+
+# Игнорировать все файлы БД
+*.db
+*.sqlite
+*.sqlite3
