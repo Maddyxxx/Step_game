@@ -31,19 +31,25 @@ var (
 	newGame = newScenario("newGame", 1, map[int]ScenarioStep{
 		1: {
 			text:     "Выберите персонажа",
-			handler:  "handleChoseHero",
+			handler:  "handleChooseHero",
 			nextStep: 2,
 			prevStep: 1,
-			buttons:  heroes.Heroes,
+			buttons:  heroes.HeroList,
 		},
 		2: {
 			text:     "",
-			handler:  "handleHistoryHero",
+			action:   "handleHistoryHero",
 			nextStep: 3,
 			prevStep: 1,
+			buttons:  []string{"Далее"},
 		},
 		3: {
-			action: "",
+			text:     "step 3 coming soon",
+			nextStep: 4,
+			prevStep: 2,
+		},
+		4: {
+			text: "step 4 coming soon",
 		},
 	})
 	unitAttackScenario = newScenario("unitAttackScenario", 1, map[int]ScenarioStep{
@@ -67,5 +73,6 @@ var (
 
 	mapScenarios = map[string]Scenarios{
 		"attackUnitScenario": unitAttackScenario,
+		"newGame":            newGame,
 	}
 )

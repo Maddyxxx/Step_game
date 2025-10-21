@@ -9,19 +9,27 @@ import (
 )
 
 func (s *Scenarios) StartScenario(b *Bot) {
+	b.state.DeleteData(b.db)
 	log.Printf("Starting scenario %s", s.scenarioName)
 	b.state.ScenarioName = s.scenarioName
 	b.state.StepName = s.firstStep
 	b.state.Context["textToSend"] = nil
-	b.state.InsertData(b.db)
-	s.sendStep(b, s.firstStep)
+	err := b.state.InsertData(b.db)
+	if err == nil {
+		log.Printf("Success inserting data for starting scenario")
+		s.sendStep(b, s.firstStep)
+	} else {
+		log.Printf("Error inserting data: %v", err)
+		b.sendMsg("Произошла ошибка начала сценария", nil)
+	}
+
 }
 
-// continueScenario - продолжение сценария при наличии state
+// ContinueScenario - продолжение сценария при наличии state
 func (s *Scenarios) ContinueScenario(b *Bot) {
 	log.Printf("Continuing scenario %s, step N %d", s.scenarioName, b.state.StepName)
 	step := s.steps[b.state.StepName]
-	resp := hand.HandlerDo(step.handler, b.db, b.state.Context)
+	resp := hand.HandlerDo(step.handler, b.state.Context)
 
 	switch resp {
 	case "stop":
@@ -45,7 +53,7 @@ func (s *Scenarios) ContinueScenario(b *Bot) {
 // сохраняет результат прохождения сценария
 func (s *Scenarios) finishScenario(b *Bot, result string) {
 	defer log.Printf("%s scenario %v for ChatID %d", result, s.scenarioName, b.state.ChatID)
-	b.saveRequest(result)
+	// b.saveRequest(result)
 	b.state.DeleteData(b.db)
 	b.sendMsg(conf.FinishScenarioAnswer, nil)
 }
@@ -54,14 +62,17 @@ func (s *Scenarios) finishScenario(b *Bot, result string) {
 func (s *Scenarios) sendStep(b *Bot, stepNum int) {
 	log.Printf("Sending step N %d for scenario %s", stepNum, s.scenarioName)
 	defer b.state.UpdateData(b.db)
-
 	step := s.steps[stepNum]
 	buttons := b.makeButtons(step.buttons)
 
 	if textToSend, ok := b.state.Context["textToSend"]; ok && textToSend != nil {
 		b.sendMsg(textToSend, buttons)
 	} else {
-		b.sendMsg(step.text, buttons)
+		if step.text != "" {
+			b.sendMsg(step.text, buttons)
+		} else {
+			b.sendMsg("Ошибка: текст ответа не сформирован", buttons)
+		}
 	}
 
 	if step.action != "" {
@@ -73,12 +84,12 @@ func (s *Scenarios) sendStep(b *Bot, stepNum int) {
 func (s *Scenarios) makeAction(b *Bot, step ScenarioStep) {
 	if s.scenarioName == "dealUpdate" {
 		defer s.finishScenario(b, "finished")
-		resp := hand.HandlerDo(step.handler, b.db, b.state.Context)
+		resp := hand.HandlerDo(step.handler, b.state.Context)
 		b.sendMsg(resp, nil)
 		return
 	}
 
-	hand.HandlerDo(step.action, b.db, b.state.Context)
+	hand.HandlerDo(step.action, b.state.Context)
 	defer s.finishScenario(b, "interrupted")
 	b.sendMsg(b.state.Context["error"], nil)
 

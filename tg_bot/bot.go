@@ -21,7 +21,7 @@ type Bot struct {
 }
 
 // Run - запуск бота
-func (b *Bot) run() {
+func (b *Bot) Run() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60 // todo REST
 
@@ -101,23 +101,18 @@ func (b *Bot) saveRequest(result string) {
 	req.InsertData(b.db)
 }
 
-func InitBot(key string, path string, debug bool) {
+func InitBot(key string, db *sqlx.DB, debug bool) *Bot {
 	bot, err := tgbotapi.NewBotAPI(key)
 	if err != nil {
 		log.Printf("Error connecting to Telegram: %v", err)
-		return
+		return nil
 	}
 	bot.Debug = debug
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	db := mod.InitDB(path)
-	defer db.Close()
-
-	b := &Bot{
+	return &Bot{
 		db:    db,
 		bot:   bot,
 		state: mod.UserState{Context: map[string]interface{}{}},
 	}
-
-	b.run()
 }

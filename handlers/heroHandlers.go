@@ -1,8 +1,6 @@
 package handlers
 
-import (
-	"Step_game/heroes"
-)
+import "Step_game/heroes"
 
 // handleOperationType - обрабатывает введенный тип операции и возвращает результат
 func handleOperationType(context map[string]interface{}) string {
@@ -10,14 +8,17 @@ func handleOperationType(context map[string]interface{}) string {
 	return "next"
 }
 
-func handleChoseHero(context map[string]interface{}) string {
-	hero := context["hero"].(string)
-	context["hero"] = heroes.Heroes[hero]
+func handleChooseHero(context map[string]interface{}) string {
+	context["hero"] = context["textMsg"].(string)
+	hero := heroes.Heroes[context["textMsg"].(string)]
+	context["textToSend"] = hero.TellHistory()
 	return "next"
 }
 
 func handleHistoryHero(context map[string]interface{}) string {
+
 	return "next"
+
 }
 
 func handleMakeAttack(context map[string]interface{}) string {

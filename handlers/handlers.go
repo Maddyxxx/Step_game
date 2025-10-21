@@ -12,7 +12,7 @@ type HandlerFuncDb func(*sqlx.DB, map[string]interface{}) string
 
 var handlers = map[string]HandlerFunc{
 	"handleOperationType": handleOperationType,
-	"handleChoseHero":     handleChoseHero,
+	"handleChooseHero":    handleChooseHero,
 	"handleHistoryHero":   handleHistoryHero,
 	"handleMakeAttack":    handleMakeAttack,
 }
@@ -36,7 +36,7 @@ func checkStep(msg interface{}) string {
 // HandlerDo - выполняет определенное действие в зависимости от handler
 // при условии что шаг пройден, возвращает "next"
 // возвращает результат функции checkStep, если пришла конкретная команда от пользователя
-func HandlerDo(handler interface{}, db *sqlx.DB, context map[string]interface{}) string {
+func HandlerDo(handler interface{}, context map[string]interface{}) string {
 	log.Printf("HandlerDo called with handler: %v, context: %v", handler, context)
 
 	if check := checkStep(context["textMsg"]); check != "" {

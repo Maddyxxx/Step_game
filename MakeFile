@@ -1,0 +1,115 @@
+# Project variables
+BINARY_NAME=bot
+MAIN_FILE=cmd/bot/main.go
+MIGRATIONS_DIR=migrations
+
+# Build variables
+BUILD_DIR=bin
+GO_BUILD_ENV=CGO_ENABLED=1 GOOS=linux GOARCH=amd64
+GO_FILES=$(shell find . -name "*.go" -type f)
+
+# Default database path
+DB_PATH=./data/bot.db
+
+.PHONY: all build run clean test migrate migrate-create help
+
+all: build
+
+## build: Скомпилировать проект
+build:
+	@echo "Building $(BINARY_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GO_BUILD_ENV) go build -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_FILE)
+	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
+
+## run: Запустить проект в режиме разработки
+run:
+	@echo "Starting application..."
+	@mkdir -p $(dir $(DB_PATH))
+	@go run $(MAIN_FILE)
+
+## run-prod: Запустить скомпилированную версию
+run-prod: build
+	@echo "Starting production version..."
+	@mkdir -p $(dir $(DB_PATH))
+	@./$(BUILD_DIR)/$(BINARY_NAME)
+
+## clean: Очистить скомпилированные файлы
+clean:
+	@echo "Cleaning..."
+	@rm -rf $(BUILD_DIR)
+	@rm -rf $(dir $(DB_PATH))
+	@go clean
+	@echo "Clean complete"
+
+## test: Запустить тесты
+test:
+	@echo "Running tests..."
+	@go test ./... -v
+
+## test-cover: Запустить тесты с покрытием
+test-cover:
+	@echo "Running tests with coverage..."
+	@go test ./... -cover -coverprofile=coverage.out
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+## migrate: Применить миграции
+migrate:
+	@echo "Applying migrations..."
+	@go run $(MAIN_FILE) migrate
+
+## migrate-create: Создать новую миграцию
+migrate-create:
+	@if [ -z "$(name)" ]; then \
+		echo "Usage: make migrate-create name=<migration_name>"; \
+		exit 1; \
+	fi
+	@timestamp=$$(date +%Y%m%d%H%M%S); \
+	file_name="$(MIGRATIONS_DIR)/$${timestamp}_$(name).sql"; \
+	mkdir -p $(MIGRATIONS_DIR); \
+	touch "$$file_name"; \
+	echo "-- Migration: $(name)" > "$$file_name"; \
+	echo "-- Created: $$(date)" >> "$$file_name"; \
+	echo "" >> "$$file_name"; \
+	echo "-- Add your SQL here" >> "$$file_name"; \
+	echo "Created migration: $$file_name"
+
+## dev: Запустить в режиме разработки с перезагрузкой (требуется air)
+dev:
+	@if ! command -v air >/dev/null 2>&1; then \
+		echo "Installing air for live reload..."; \
+		go install github.com/cosmtrek/air@latest; \
+	fi
+	@air
+
+## deps: Установить зависимости
+deps:
+	@echo "Installing dependencies..."
+	@go mod download
+	@go mod tidy
+
+## lint: Запустить линтер
+lint:
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "Installing golangci-lint..."; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.54.2; \
+	fi
+	@golangci-lint run ./...
+
+## db-shell: Открыть интерактивную оболочку БД
+db-shell:
+	@if ! command -v sqlite3 >/dev/null 2>&1; then \
+		echo "sqlite3 is required but not installed"; \
+		exit 1; \
+	fi
+	@mkdir -p $(dir $(DB_PATH))
+	@sqlite3 $(DB_PATH)
+
+## help: Показать справку по командам
+help:
+	@echo "Available commands:"
+	@echo
+	@sed -n 's/^##//p' $(MAIN_FILE) | column -t -s ':' | sed -e 's/^/ /'
+	@echo
+	@echo "Database path: $(DB_PATH)"

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"testing"
+
+	db "Step_game/database"
 )
 
 func makeStates(db *sqlx.DB, n int) {
@@ -20,7 +22,7 @@ func makeStates(db *sqlx.DB, n int) {
 }
 
 func TestUpdateStateFromDB(t *testing.T) {
-	var db = InitDB("test.db")
+	var db = db.InitDBMust("test.db")
 	n := 10
 	makeStates(db, n)
 
@@ -72,7 +74,7 @@ func makeReqs(db *sqlx.DB, n int) {
 }
 
 func TestInsertDataToDB(t *testing.T) {
-	var db = InitDB("test.db")
+	var db = db.InitDBMust("test.db")
 	n := 10
 
 	for num := range n {

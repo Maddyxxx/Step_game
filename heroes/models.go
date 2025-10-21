@@ -1,6 +1,7 @@
 package heroes
 
 type Hero interface {
+	TellHistory() string
 	Move()
 	Attack() int
 	UseAbility(ability string) (string, int)
@@ -16,6 +17,10 @@ type ClassHero struct {
 	Mana      int
 	Skills    map[string]Skill
 	Equipment map[string]Equipment
+}
+
+func (h ClassHero) TellHistory() string {
+	return Histories[h.Class]
 }
 
 func (h ClassHero) Move() {
@@ -62,17 +67,22 @@ func (h ClassHero) ChangeEquipment(newEquipment Equipment) {
 }
 
 // Heroes
-var (
-	Warrior = ClassHero{
+
+var Heroes = map[string]ClassHero{
+	"warrior": {
 		Class:     "warrior",
 		Level:     1,
 		Health:    100,
 		Mana:      0,
 		Skills:    WarriorSkills,
 		Equipment: WarriorStartEquipment,
-	}
-)
+	},
+}
 
-var Heroes = map[string]ClassHero{
-	"warrior": Warrior,
+var HeroList = []string{
+	"warrior",
+}
+
+var Histories = map[string]string{
+	"warrior": "Эта история про могучего воителя, который по преданиям был потомком самого Зевса",
 }
