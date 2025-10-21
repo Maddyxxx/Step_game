@@ -1,10 +1,9 @@
 package main
 
 import (
+	conf "Step_game/config"
 	"Step_game/database"
 	"Step_game/migrations"
-
-	conf "Step_game/config"
 	bot "Step_game/tg_bot"
 )
 

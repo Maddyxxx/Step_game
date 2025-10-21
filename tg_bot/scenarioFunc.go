@@ -1,33 +1,35 @@
 package tg_bot
 
 import (
-	"fmt"
-	"log"
-
 	conf "Step_game/config"
+	"Step_game/domain"
 	hand "Step_game/handlers"
+	"Step_game/repository"
+	"context"
+	"fmt"
+	"go.uber.org/zap"
 )
 
 func (s *Scenarios) StartScenario(b *Bot) {
-	b.state.DeleteData(b.db)
-	log.Printf("Starting scenario %s", s.scenarioName)
+	b.repo.Delete(b.ctx, b.state.ChatID, b.state)
+	b.logger.Info("Starting scenario", s.scenarioName)
 	b.state.ScenarioName = s.scenarioName
 	b.state.StepName = s.firstStep
 	b.state.Context["textToSend"] = nil
-	err := b.state.InsertData(b.db)
+
+	err := b.repo.Create(b.ctx, b.state)
 	if err == nil {
-		log.Printf("Success inserting data for starting scenario")
+		b.logger.Info("Success inserting data for starting scenario")
 		s.sendStep(b, s.firstStep)
 	} else {
-		log.Printf("Error inserting data: %v", err)
+		b.logger.Error("Error inserting data ", err)
 		b.sendMsg("Произошла ошибка начала сценария", nil)
 	}
-
 }
 
 // ContinueScenario - продолжение сценария при наличии state
 func (s *Scenarios) ContinueScenario(b *Bot) {
-	log.Printf("Continuing scenario %s, step N %d", s.scenarioName, b.state.StepName)
+	b.logger.Info("Continuing scenario %s, step N %d", s.scenarioName, b.state.StepName)
 	step := s.steps[b.state.StepName]
 	resp := hand.HandlerDo(step.handler, b.state.Context)
 
@@ -52,16 +54,24 @@ func (s *Scenarios) ContinueScenario(b *Bot) {
 // finishScenario - удаляет состояние пользователя после прохождения или прерывания сценария,
 // сохраняет результат прохождения сценария
 func (s *Scenarios) finishScenario(b *Bot, result string) {
-	defer log.Printf("%s scenario %v for ChatID %d", result, s.scenarioName, b.state.ChatID)
 	// b.saveRequest(result)
-	b.state.DeleteData(b.db)
+	err := b.repo.Delete(b.ctx, b.state.ChatID, b.state)
+	if err != nil {
+		b.logger.Error("Failed to delete UserState", zap.Error(err))
+	}
 	b.sendMsg(conf.FinishScenarioAnswer, nil)
+	b.logger.Info("%s scenario %v for ChatID %d", result, s.scenarioName, b.state.ChatID)
 }
 
 // sendStep - отправка следующего шага по сценарию
 func (s *Scenarios) sendStep(b *Bot, stepNum int) {
-	log.Printf("Sending step N %d for scenario %s", stepNum, s.scenarioName)
-	defer b.state.UpdateData(b.db)
+	b.logger.Info("Sending step N %d for scenario %s", stepNum, s.scenarioName)
+	defer func(usRepo *repository.UserStateRepo, ctx context.Context, state domain.UserState) {
+		err := b.repo.Update(ctx, state)
+		if err != nil {
+			b.logger.Error("Failed to update UserState", zap.Error(err))
+		}
+	}(b.usRepo, b.ctx, b.state)
 	step := s.steps[stepNum]
 	buttons := b.makeButtons(step.buttons)
 
@@ -92,5 +102,4 @@ func (s *Scenarios) makeAction(b *Bot, step ScenarioStep) {
 	hand.HandlerDo(step.action, b.state.Context)
 	defer s.finishScenario(b, "interrupted")
 	b.sendMsg(b.state.Context["error"], nil)
-
 }

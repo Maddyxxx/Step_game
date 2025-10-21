@@ -1,23 +1,27 @@
 package tg_bot
 
 import (
+	"Step_game/repository"
+	"context"
 	"fmt"
+	"github.com/jmoiron/sqlx"
+	"go.uber.org/zap"
 	"log"
 	"strings"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	conf "Step_game/config"
-	mod "Step_game/models"
+	mod "Step_game/domain"
 )
 
 type Bot struct {
-	db    *sqlx.DB
-	bot   *tgbotapi.BotAPI
-	state mod.UserState
+	bot    *tgbotapi.BotAPI
+	state  mod.UserState
+	repo   *repository.SQLXRepository
+	usRepo *repository.UserStateRepo
+	logger *zap.SugaredLogger
+	ctx    context.Context
 }
 
 // Run - запуск бота
@@ -35,11 +39,12 @@ func (b *Bot) Run() {
 // handleMessage - обработка входящих сообщений
 func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 	b.state.ChatID = msg.Chat.ID
+	b.logger.Info("получено новое сообщение от ", msg.Chat.ID, " ", msg.Text)
 	intent := conf.GetIntent(strings.ToLower(msg.Text))
-	err := b.state.GetData(b.db) // попытка получить состояние пользователя
+	_, err := b.usRepo.GetByChatID(b.ctx, b.state.ChatID) // попытка получить состояние пользователя
 
 	if intent != nil {
-		b.processIntent(intent, msg)
+		b.processIntent(intent, msg, b.ctx)
 	} else if err == nil {
 		b.state.Context["textMsg"] = strings.ToLower(msg.Text)
 		scenario := mapScenarios[b.state.ScenarioName]
@@ -51,7 +56,7 @@ func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 }
 
 // processIntent - обработка намерения
-func (b *Bot) processIntent(intent *conf.Intent, msg *tgbotapi.Message) {
+func (b *Bot) processIntent(intent *conf.Intent, msg *tgbotapi.Message, ctx context.Context) {
 	scenario := intent.Scenario
 	if scenario != "" {
 		scenario := mapScenarios[scenario]
@@ -90,29 +95,35 @@ func (b *Bot) sendMsg(msg interface{}, buttons interface{}) {
 	b.bot.Send(Msg)
 }
 
-func (b *Bot) saveRequest(result string) {
-	date := time.Now()
-	req := mod.Request{
-		Date:      date.Format("02.01.2006 15:04:05"),
-		UserName:  b.state.UserName,
-		Operation: b.state.ScenarioName,
-		Result:    result,
-	}
-	req.InsertData(b.db)
-}
+// todo доработать
+//func (b *Bot) saveRequest(result string) {
+//	date := time.Now()
+//	req := mod.Request{
+//		Date:      date.Format("02.01.2006 15:04:05"),
+//		UserName:  b.state.UserName,
+//		Operation: b.state.ScenarioName,
+//		Result:    result,
+//	}
+//	req.InsertData(b.db)
+//}
 
 func InitBot(key string, db *sqlx.DB, debug bool) *Bot {
+	logger, _ := zap.NewDevelopment()
+
 	bot, err := tgbotapi.NewBotAPI(key)
 	if err != nil {
-		log.Printf("Error connecting to Telegram: %v", err)
+		logger.Fatal("Error connecting to Telegram: %v", zap.Error(err))
 		return nil
 	}
 	bot.Debug = debug
-	log.Printf("Authorized on account %s", bot.Self.UserName)
+	logger.Info("Authorized on account", zap.String("userName", bot.Self.UserName))
 
 	return &Bot{
-		db:    db,
-		bot:   bot,
-		state: mod.UserState{Context: map[string]interface{}{}},
+		bot:    bot,
+		state:  mod.UserState{Context: map[string]interface{}{}},
+		repo:   repository.NewSQLXRepository(db, logger),
+		usRepo: repository.NewUserStateRepository(db, logger),
+		logger: logger.Sugar(),
+		ctx:    context.Background(),
 	}
 }
